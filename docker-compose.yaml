@@ -1,0 +1,78 @@
+version: '3.8'
+services:
+
+    # Application
+    merwin_app:
+        container_name: merwin_app
+        build:
+          args:
+            user: merwinonline
+            uid: 1000
+          context: .
+          dockerfile: ./docker/app.dockerfile
+        working_dir: /var/www
+        restart: unless-stopped
+        volumes:
+            - ./:/var/www
+        depends_on:
+            - merwin_mysql
+
+    # Web Server
+    merwin_web:
+        container_name: merwin_web
+        environment:
+          DB_PORT: ${DB_PORT}
+          DB_DATABASE: ${DB_DATABASE}
+          DB_USERNAME: ${DB_USERNAME}
+          DB_PASSWORD: ${DB_PASSWORD}
+          DB_HOST: ${DB_HOST}
+        depends_on:
+          - merwin_mysql
+          - merwin_app
+        build:
+            context: .
+            dockerfile: ./docker/web.dockerfile
+        working_dir: /var/www
+        volumes:
+            - ./:/var/www
+        command: [nginx-debug, '-g', 'daemon off;']
+        ports:
+            - 80:80
+
+    # Database
+    merwin_mysql:
+      image: mysql:5.7
+      container_name: merwin_mysql
+      volumes:
+          - dbdata:/var/lib/mysql
+          - ./docker/mysql/my.cnf:/etc/my.cnf
+          - ./docker/mysql-backup:/docker-entrypoint-initdb.d
+      environment:
+          MYSQL_DATABASE: ${DB_DATABASE}
+          MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+          MYSQL_PASSWORD: ${DB_PASSWORD}
+          MYSQL_USER: ${DB_USERNAME}
+          MYSQL_ALLOW_EMPTY_PASSWORD: ${DB_USERNAME}
+      ports:
+          - "3306:3306"
+      restart: unless-stopped
+      command: --sql_mode=""
+
+    # Database management phpmyadmin
+    sd_pma:
+        image: phpmyadmin:latest
+        container_name: sd_pma
+        environment:
+            - PMA_ARBITRARY=1
+            - PMA_HOST=${DB_HOST}
+            - PMA_USER=${DB_USERNAME}
+            - PMA_PASSWORD=${DB_PASSWORD}
+            - PMA_PORT=${DB_PORT}
+            - UPLOAD_LIMIT=300M
+        depends_on:
+            - merwin_mysql
+        ports:
+            - 8080:80
+
+volumes:
+    dbdata:
